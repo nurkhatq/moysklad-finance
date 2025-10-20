@@ -372,9 +372,22 @@ class OrderProcessor:
     
     @staticmethod
     def extract_order_data(order):
-        order_data = {
+        order_data = {}
+
+        # --- Дата с учетом часового пояса ---
+        moment_str = order.get("moment", "")
+        if moment_str:
+            # Парсим ISO-строку
+            moment_dt = datetime.fromisoformat(moment_str.replace("Z", "+00:00"))
+            # Сдвигаем на UTC+5 (Казахстан)
+            local_dt = moment_dt + timedelta(hours=5)
+            order_data["Дата"] = local_dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            order_data["Дата"] = ""
+
+        # --- Остальные поля ---
+        order_data.update({
             "Номер заказа": order.get("name", ""),
-            "Дата": order.get("moment", ""),
             "Контрагент": order.get("agent", {}).get("name", "") if order.get("agent") else "",
             "Организация": order.get("organization", {}).get("name", "") if order.get("organization") else "",
             "Статус": order.get("state", {}).get("name", "") if order.get("state") else "",
@@ -385,17 +398,19 @@ class OrderProcessor:
             "Зарезервировано": order.get("reservedSum", 0) / 100,
             "НДС": order.get("vatSum", 0) / 100,
             "НДС включён": "Да" if order.get("vatIncluded") else "Нет",
-        }
-        
+        })
+
+        # --- Атрибуты заказа ---
         attributes = order.get("attributes", [])
         for attr in attributes:
             attr_name = attr.get("name", "")
             attr_value = attr.get("value", "")
             order_data[attr_name] = attr_value
-        
+
+        # --- Адрес доставки ---
         if order.get("shipmentAddress"):
             order_data["Адрес доставки"] = order.get("shipmentAddress")
-        
+
         return order_data
 
 
