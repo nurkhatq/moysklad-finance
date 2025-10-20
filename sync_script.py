@@ -261,11 +261,19 @@ class OrderProcessor:
         # --- Дата с учетом часового пояса ---
         moment_str = order.get("moment", "")
         if moment_str:
+            # МойСклад возвращает время в UTC+3 (московское)
             moment_dt = datetime.fromisoformat(moment_str.replace("Z", "+00:00"))
-            local_dt = moment_dt + timedelta(hours=5)  # UTC+5
-            order_data["Дата"] = local_dt.strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Сначала приводим к UTC
+            utc_dt = moment_dt - timedelta(hours=3)  # убираем московский +3
+            
+            # Потом сдвигаем в Казахстанское время (UTC+5)
+            kz_dt = utc_dt + timedelta(hours=5)
+            
+            order_data["Дата"] = kz_dt.strftime("%Y-%m-%d %H:%M:%S")
         else:
             order_data["Дата"] = ""
+
 
         # --- Остальные поля ---
         order_data.update({
