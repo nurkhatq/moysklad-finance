@@ -1,0 +1,4 @@
+credentials.json
+config.json
+.env
+*.log
