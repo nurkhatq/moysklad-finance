@@ -186,9 +186,13 @@ class MoySkladAPI:
             
             filters = []
             if date_from:
-                filters.append(f"moment>={date_from}")
+                # Конвертируем казахстанское время в московское для фильтрации
+                date_from_utc3 = self.convert_kz_to_msk_filter(date_from)
+                filters.append(f"moment>={date_from_utc3}")
             if date_to:
-                filters.append(f"moment<={date_to}")
+                # Конвертируем казахстанское время в московское для фильтрации
+                date_to_utc3 = self.convert_kz_to_msk_filter(date_to, end_of_day=True)
+                filters.append(f"moment<={date_to_utc3}")
             
             if filters:
                 params["filter"] = ";".join(filters)
@@ -209,6 +213,29 @@ class MoySkladAPI:
         
         return all_orders
 
+    def convert_kz_to_msk_filter(self, datetime_str, end_of_day=False):
+        """
+        Конвертирует время из казахстанского (UTC+5) в московское (UTC+3) для фильтрации API
+        """
+        try:
+            # Парсим входную дату (предполагается в UTC+5)
+            if ' ' in datetime_str:
+                dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+            else:
+                dt = datetime.strptime(datetime_str, "%Y-%m-%d")
+                if end_of_day:
+                    dt = dt.replace(hour=23, minute=59, second=59)
+                else:
+                    dt = dt.replace(hour=0, minute=0, second=0)
+            
+            # Конвертируем: KZ (UTC+5) → MSK (UTC+3) = -2 часа
+            dt_msk = dt - timedelta(hours=2)
+            
+            return dt_msk.strftime("%Y-%m-%d %H:%M:%S")
+        
+        except Exception as e:
+            logger.error(f"Ошибка конвертации времени: {e}")
+            return datetime_str
 
 class OrderProcessor:
     """Класс для обработки заказов"""
@@ -805,21 +832,23 @@ def run_sync(config, fields_config, sync_state, days=30, mode="update", date_fro
         # 2. Загрузка заказов
         status_text.text("📦 Загрузка заказов...")
         progress_bar.progress(20)
-        
+
         if date_from and date_to:
-            date_from_str = date_from.strftime("%Y-%m-%d 00:00:00")
-            date_to_str = date_to.strftime("%Y-%m-%d 23:59:59")
+            # Используем полночь и конец дня в казахстанском времени
+            date_from_str = date_from.strftime("%Y-%m-%d 00:00:00")  # KZ time
+            date_to_str = date_to.strftime("%Y-%m-%d 23:59:59")      # KZ time
         else:
             date_to = datetime.now()
             date_from = date_to - timedelta(days=days)
-            date_from_str = date_from.strftime("%Y-%m-%d 00:00:00")
-            date_to_str = date_to.strftime("%Y-%m-%d 23:59:59")
-        
+            date_from_str = date_from.strftime("%Y-%m-%d 00:00:00")  # KZ time
+            date_to_str = date_to.strftime("%Y-%m-%d 23:59:59")      # KZ time
+
         orders = api.get_all_orders(
             date_from_str, 
             date_to_str,
             progress_callback=lambda msg: status_text.text(msg)
         )
+
         
         if not orders:
             st.warning("⚠️ Заказы не найдены за указанный период")

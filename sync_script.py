@@ -49,13 +49,14 @@ class MoySkladAPI:
             logger.error(f"Ошибка запроса {endpoint}: {e}")
             return None
     
-    def get_all_orders(self, date_from=None, date_to=None):
+    def get_all_orders(self, date_from=None, date_to=None, progress_callback=None):
         all_orders = []
         offset = 0
         limit = 100
         
         while True:
-            logger.info(f"Загрузка заказов: offset {offset}...")
+            if progress_callback:
+                progress_callback(f"Загрузка заказов: offset {offset}...")
             
             endpoint = "/entity/customerorder"
             params = {
@@ -66,9 +67,13 @@ class MoySkladAPI:
             
             filters = []
             if date_from:
-                filters.append(f"moment>={date_from}")
+                # Конвертируем казахстанское время в московское для фильтрации
+                date_from_utc3 = self.convert_kz_to_msk_filter(date_from)
+                filters.append(f"moment>={date_from_utc3}")
             if date_to:
-                filters.append(f"moment<={date_to}")
+                # Конвертируем казахстанское время в московское для фильтрации
+                date_to_utc3 = self.convert_kz_to_msk_filter(date_to, end_of_day=True)
+                filters.append(f"moment<={date_to_utc3}")
             
             if filters:
                 params["filter"] = ";".join(filters)
@@ -87,9 +92,31 @@ class MoySkladAPI:
             offset += limit
             time.sleep(0.2)
         
-        logger.info(f"✅ Загружено заказов: {len(all_orders)}")
         return all_orders
 
+    def convert_kz_to_msk_filter(self, datetime_str, end_of_day=False):
+        """
+        Конвертирует время из казахстанского (UTC+5) в московское (UTC+3) для фильтрации API
+        """
+        try:
+            # Парсим входную дату (предполагается в UTC+5)
+            if ' ' in datetime_str:
+                dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+            else:
+                dt = datetime.strptime(datetime_str, "%Y-%m-%d")
+                if end_of_day:
+                    dt = dt.replace(hour=23, minute=59, second=59)
+                else:
+                    dt = dt.replace(hour=0, minute=0, second=0)
+            
+            # Конвертируем: KZ (UTC+5) → MSK (UTC+3) = -2 часа
+            dt_msk = dt - timedelta(hours=2)
+            
+            return dt_msk.strftime("%Y-%m-%d %H:%M:%S")
+        
+        except Exception as e:
+            logger.error(f"Ошибка конвертации времени: {e}")
+            return datetime_str
 
 class OrderProcessor:
     """Класс для обработки заказов"""
