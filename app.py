@@ -9,6 +9,19 @@ import time
 import json
 import os
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Создаём обработчик вывода в консоль (Streamlit его подхватит)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# Добавляем обработчик к логгеру (если ещё не добавлен)
+if not logger.handlers:
+    logger.addHandler(handler)
 
 # Конфигурация страницы
 st.set_page_config(
@@ -428,33 +441,36 @@ class GoogleSheetsUploader:
         df_clean = df_clean.replace([float('inf'), float('-inf')], 0)
         df_clean = df_clean.fillna('')
         
+        include_header = False
+        
         if mode == "replace":
             worksheet.clear()
             start_row = 1
+            include_header = True
         elif mode == "append":
-            # Получаем последнюю заполненную строку
             existing_data = worksheet.get_all_values()
             start_row = len(existing_data) + 1
+            include_header = False
         else:  # update
-            # Обновление существующих и добавление новых
             existing_orders = self.get_existing_orders(worksheet_name)
             existing_data = worksheet.get_all_values()
             
-            # Разделяем на новые и существующие
             if "Номер заказа" in df_clean.columns:
                 new_df = df_clean[~df_clean["Номер заказа"].isin(existing_orders)]
                 if not new_df.empty:
                     start_row = len(existing_data) + 1
                     df_clean = new_df
+                    include_header = False
                 else:
-                    return 0  # Нет новых данных
+                    return 0
             else:
                 worksheet.clear()
                 start_row = 1
+                include_header = True
         
         # Конвертируем в список
         data = []
-        if mode == "replace" or start_row == 1:
+        if include_header:
             data.append(df_clean.columns.values.tolist())
         
         for row in df_clean.values:
@@ -469,12 +485,12 @@ class GoogleSheetsUploader:
                     clean_row.append(val)
             data.append(clean_row)
         
-        # Загружаем данные
         if data:
             worksheet.update(values=data, range_name=f'A{start_row}')
         
+        logger.info(f"✅ {worksheet_name}: загружено {len(df_clean)} строк")
         return len(df_clean)
-    
+
     def format_worksheet(self, worksheet_name):
         """Применить форматирование"""
         try:
