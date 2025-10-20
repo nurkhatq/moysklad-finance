@@ -292,10 +292,19 @@ class GoogleSheetsUploader:
             'https://www.googleapis.com/auth/drive'
         ]
         
-        # ИЗМЕНИТЬ ЭТИ СТРОКИ:
-        creds = Credentials.from_service_account_file(credentials_file, scopes=scope)
+        import streamlit as st  # Добавь импорт в начале файла
+
+        # 🔄 Вместо файла берём данные из Streamlit Secrets, если они заданы
+        if "google_credentials" in st.secrets:
+            creds_dict = st.secrets["google_credentials"]
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        else:
+            # fallback — для локального запуска (если файл реально существует)
+            creds = Credentials.from_service_account_file(credentials_file, scopes=scope)
+
         self.client = gspread.authorize(creds)
         self.spreadsheet = self.client.open(spreadsheet_name)
+
     
     def get_existing_orders(self, worksheet_name):
         """Получить существующие номера заказов"""

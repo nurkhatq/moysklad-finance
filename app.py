@@ -407,9 +407,15 @@ class GoogleSheetsUploader:
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
-        
-        # ИЗМЕНИТЬ ЭТИ СТРОКИ:
-        creds = Credentials.from_service_account_file(credentials_file, scopes=scope)
+
+        # 🔄 Вместо файла берём данные из Streamlit Secrets
+        if "google_credentials" in st.secrets:
+            creds_dict = st.secrets["google_credentials"]
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        else:
+            # fallback — если вдруг ты тестируешь локально
+            creds = Credentials.from_service_account_file(credentials_file, scopes=scope)
+
         self.client = gspread.authorize(creds)
         self.spreadsheet = self.client.open(spreadsheet_name)
     
